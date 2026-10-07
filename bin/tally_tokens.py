@@ -6,7 +6,8 @@ in one call and in its 1.5 s budget, so each file is consumed incrementally from
 remembered in a cache file; a run only parses lines appended since the previous run.
 
 Usage: tally_tokens.py <session-id>
-Prints one JSON object: {"today": int, "lastHour": int, "requestsToday": int}.
+Prints one JSON object: {"transcriptWritten": true, "today": int, "lastHour": int, "requestsToday": int},
+or {"transcriptWritten": false} for a session that has not written its transcript yet.
 """
 
 import datetime
@@ -26,10 +27,16 @@ def claude_config_directory():
     return configured if configured else os.path.expanduser("~/.claude")
 
 
+class TranscriptNotWrittenYet(RuntimeError):
+    """A new session creates its transcript file only once the first message is sent."""
+
+
 def find_main_transcript(session_id):
     pattern = os.path.join(claude_config_directory(), "projects", "*", session_id + ".jsonl")
     matches = glob.glob(pattern)
-    if len(matches) != 1:
+    if not matches:
+        raise TranscriptNotWrittenYet("no transcript matching %s yet" % pattern)
+    if len(matches) > 1:
         raise RuntimeError("expected exactly one transcript matching %s, found %d" % (pattern, len(matches)))
     return matches[0]
 
@@ -144,11 +151,19 @@ def tally(session_id):
     return {"today": sum(today_values), "lastHour": last_hour, "requestsToday": len(today_values)}
 
 
+def report(session_id):
+    try:
+        counts = tally(session_id)
+    except TranscriptNotWrittenYet:
+        return {"transcriptWritten": False}
+    return dict({"transcriptWritten": True}, **counts)
+
+
 def main():
     if len(sys.argv) != 2:
         sys.stderr.write("usage: tally_tokens.py <session-id>\n")
         return 2
-    print(json.dumps(tally(sys.argv[1])))
+    print(json.dumps(report(sys.argv[1])))
     return 0
 
 

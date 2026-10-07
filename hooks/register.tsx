@@ -24,6 +24,29 @@ export function formatContextTokens(reading: ContextReading | null): string {
   return reading?.tokens === undefined ? '–' : formatTokens(reading.tokens)
 }
 
+/** Reads the script's JSON report; anything not in the shape it documents is a failure, never a number. */
+export function parseTallyReport(stdout: string): TallyReading {
+  const report = JSON.parse(stdout) as { transcriptWritten?: unknown; today?: unknown; lastHour?: unknown }
+  if (report.transcriptWritten === false) return { kind: 'awaitingTranscript' }
+  if (typeof report.today !== 'number' || typeof report.lastHour !== 'number') {
+    return { kind: 'failed', reason: `unexpected report: ${stdout.trim()}` }
+  }
+  return { kind: 'counted', today: report.today, lastHour: report.lastHour }
+}
+
+/** One value of the NCR row: a count, a dash before the transcript exists, an ellipsis while counting. */
+export function formatTallyValue(reading: TallyReading, pick: (counted: { today: number; lastHour: number }) => number): string {
+  switch (reading.kind) {
+    case 'counted':
+      return formatTokens(pick(reading))
+    case 'awaitingTranscript':
+      return '–'
+    case 'pending':
+    case 'failed':
+      return '…'
+  }
+}
+
 async function countTokens($: EngineInterface): Promise<TallyReading> {
   try {
     const sessionId = await $.session.id()
@@ -32,8 +55,7 @@ async function countTokens($: EngineInterface): Promise<TallyReading> {
     if (result.exitCode !== 0) {
       return { kind: 'failed', reason: result.stderr.trim().split('\n').pop() ?? `exit ${result.exitCode}` }
     }
-    const counted = JSON.parse(result.stdout) as { today: number; lastHour: number }
-    return { kind: 'counted', today: counted.today, lastHour: counted.lastHour }
+    return parseTallyReport(result.stdout)
   } catch (error) {
     return { kind: 'failed', reason: error instanceof Error ? error.message : String(error) }
   }
@@ -93,11 +115,11 @@ export const register: Register = on => {
           <Box key="ncr" flexDirection="row" gap={GROUP_GAP}>
             <Box flexDirection="row" gap={1}>
               <Text bold>NCR tok</Text>
-              <Text>{tokens.kind === 'counted' ? formatTokens(tokens.today) : '…'}</Text>
+              <Text>{formatTallyValue(tokens, counted => counted.today)}</Text>
             </Box>
             <Box flexDirection="row" gap={1}>
               <Text bold>Last hour</Text>
-              <Text>{tokens.kind === 'counted' ? formatTokens(tokens.lastHour) : '…'}</Text>
+              <Text>{formatTallyValue(tokens, counted => counted.lastHour)}</Text>
             </Box>
           </Box>
         )}

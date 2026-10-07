@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
-import { formatContextTokens, formatTokens } from './register'
+import { formatContextTokens, formatTokens, parseTallyReport } from './register'
 
 // The test runner provides setTimeout; the plugin environment's typings, which tests share, leave it out.
 declare function setTimeout(callback: (value: unknown) => void, ms: number): unknown
@@ -29,6 +29,16 @@ test('context is its token count alone, a dash until the first response reports 
   expect(formatContextTokens(null)).toBe('–')
   expect(formatContextTokens({ window: 1_000_000 })).toBe('–')
   expect(formatContextTokens({ window: 1_000_000, tokens: 200_400, percent: 20 })).toBe('200k')
+})
+
+test('script reports parse into a count, a not-yet-written transcript, or a failure, never NaN', async () => {
+  expect(parseTallyReport('{"transcriptWritten": true, "today": 7, "lastHour": 3, "requestsToday": 1}')).toEqual({
+    kind: 'counted',
+    today: 7,
+    lastHour: 3,
+  })
+  expect(parseTallyReport('{"transcriptWritten": false}')).toEqual({ kind: 'awaitingTranscript' })
+  expect(parseTallyReport('{"transcriptWritten": true}').kind).toBe('failed')
 })
 
 test('band shows bold labels and plain values, without the window size or limit windows', async ($, on) => {
@@ -73,6 +83,11 @@ test('band shows today under NCR tok and the last hour as its own item once coun
 test('band shows a failed count as an error, never as zero', async ($, on) => {
   const texts = await mountAfterTally($, on, { exitCode: 1, stdout: '', stderr: 'Traceback\nRuntimeError: no transcript' })
   expect(texts).toEqual(['Context', '5k', 'NCR tok', 'error: RuntimeError: no transcript'])
+})
+
+test('band shows dashes, not an error, before the session has written its transcript', async ($, on) => {
+  const texts = await mountAfterTally($, on, { exitCode: 0, stdout: '{"transcriptWritten": false}', stderr: '' })
+  expect(texts).toEqual(['Context', '5k', 'NCR tok', '–', 'Last hour', '–'])
 })
 
 test('band yields to a survey', async ($, on) => {

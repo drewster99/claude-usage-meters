@@ -8,6 +8,7 @@ export type ContextReading = {
 /** This session's (and its subagents') non-cache-read tokens, or why they could not be counted. */
 export type TallyReading =
   | { kind: 'pending' }
+  | { kind: 'awaitingTranscript' }
   | { kind: 'counted'; today: number; lastHour: number }
   | { kind: 'failed'; reason: string }
 

@@ -108,6 +108,25 @@ class TallyTokensTests(unittest.TestCase):
         with open(os.path.join(tally_tokens.CACHE_DIRECTORY, SESSION_ID + ".json")) as cache_file:
             self.assertEqual(set(json.load(cache_file)["requests"]), {"recent"})
 
+    def test_a_session_with_no_transcript_yet_reports_that_instead_of_failing(self):
+        # A new session writes its transcript only once the first message is sent.
+        self.assertEqual(tally_tokens.report(SESSION_ID), {"transcriptWritten": False})
+
+    def test_report_carries_the_tally_once_the_transcript_exists(self):
+        self.append(self.main, assistant_line("a", self.now - 10, output=3))
+        self.assertEqual(
+            tally_tokens.report(SESSION_ID),
+            {"transcriptWritten": True, "today": 3, "lastHour": 3, "requestsToday": 1},
+        )
+
+    def test_two_transcripts_for_one_session_are_still_an_error(self):
+        other_project = os.path.join(os.environ["CLAUDE_CONFIG_DIR"], "projects", "-other-project")
+        os.makedirs(other_project)
+        self.append(self.main, assistant_line("a", self.now - 10, output=3))
+        self.append(os.path.join(other_project, SESSION_ID + ".jsonl"), assistant_line("b", self.now - 10, output=3))
+        with self.assertRaises(RuntimeError):
+            tally_tokens.report(SESSION_ID)
+
     def test_missing_transcript_is_an_error_not_zero(self):
         with self.assertRaises(RuntimeError):
             tally_tokens.tally("00000000-0000-0000-0000-000000000000")
