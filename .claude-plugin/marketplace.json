@@ -1,0 +1,14 @@
+{
+  "name": "usage-meters",
+  "owner": {
+    "name": "Andrew Benson"
+  },
+  "description": "Claude Code mod: context length and non-cache-read token meters above the prompt",
+  "plugins": [
+    {
+      "name": "usage-meters",
+      "source": "./",
+      "description": "Context length and today's / last hour's non-cache-read tokens (session + subagents) above the prompt"
+    }
+  ]
+}

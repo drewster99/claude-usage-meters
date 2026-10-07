@@ -1,0 +1,1 @@
+{ "name": "usage-meters", "version": "0.1.0", "author": { "name": "Andrew Benson" }, "description": "Context length and today's / last hour's non-cache-read tokens (session + subagents) above the prompt", "types": "./types/index.d.ts" }
